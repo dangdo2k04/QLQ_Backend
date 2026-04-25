@@ -1,33 +1,59 @@
 // server/src/middlewares/authMiddleware.js
-const jwt = require('jsonwebtoken'); // Cần cài đặt thư viện này
-const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+const NguoiDung = require('../models/NguoiDung');
 
-// Middleware để bảo vệ các route riêng tư
-exports.protect = async (req, res, next) => {
+// @desc    Xác thực Token (Bảo vệ các route riêng tư)
+exports.baoVe = async (req, res, next) => {
   let token;
 
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+  // Kiểm tra token từ header Authorization
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
     token = req.headers.authorization.split(' ')[1];
   }
 
+  // Đảm bảo token tồn tại
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Not authorized to access this route' });
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Bạn không có quyền truy cập, vui lòng đăng nhập' 
+    });
   }
 
   try {
+    // Giải mã token (Sử dụng secret key 'theanh' như bạn đã định nghĩa)
     const decoded = jwt.verify(token, 'theanh');
-    req.user = await User.findById(decoded.id);
+
+    // Tìm người dùng trong DB và gán vào req.user
+    // Sử dụng .select('-matKhau') để bảo mật
+    req.user = await NguoiDung.findById(decoded.id).select('-matKhau');
+
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Người dùng liên kết với token này không còn tồn tại' 
+      });
+    }
+
     next();
   } catch (error) {
-    return res.status(401).json({ success: false, message: 'Not authorized to access this route' });
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Token không hợp lệ hoặc đã hết hạn' 
+    });
   }
 };
 
-// Middleware để kiểm tra vai trò người dùng
-exports.authorize = (...roles) => {
+// @desc    Kiểm tra vai trò người dùng (Phân quyền)
+exports.phanQuyen = (...vaiTros) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: `User role ${req.user.role} is not authorized to access this route` });
+    if (!vaiTros.includes(req.user.vaiTro)) {
+      return res.status(403).json({
+        success: false,
+        message: `Vai trò [${req.user.vaiTro}] không có quyền thực hiện hành động này`
+      });
     }
     next();
   };
