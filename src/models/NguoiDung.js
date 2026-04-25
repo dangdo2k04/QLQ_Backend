@@ -8,8 +8,7 @@ const NguoiDungSchema = new mongoose.Schema({
   diaChi: { type: String },
   vaiTro: { 
     type: String, 
-    enum: ['admin', 'nhanvien_kho', 'nhanvien_banhang', 'khachhang'], 
-    default: 'khachhang' 
+    enum: ['admin', 'nhanvien_kho', 'nhanvien_banhang', 'khachhang']
   }
 }, { timestamps: true });
 

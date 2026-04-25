@@ -9,7 +9,10 @@ const SanPhamSchema = new mongoose.Schema({
   tonKho: { type: Number, default: 0 },
   nguongThongBao: { type: Number, default: 5 }, // Tự động báo khi dưới mức này
   donViTinh: { type: String, default: 'Cái' },
-  hinhAnh: [{ url: String }],
+  hinhAnh: {
+    type: [String],
+    default: []
+  },
   trangThai: { type: String, enum: ['DangBan', 'NgungKinhDoanh'], default: 'DangBan' }
 }, { timestamps: true });
 

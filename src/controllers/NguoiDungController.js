@@ -6,7 +6,7 @@ const bcrypt = require('bcryptjs');
 // @route   POST /api/v1/auth/dang-ky
 exports.dangKy = async (req, res) => {
   try {
-    const { ten, email, matKhau, soDienThoai, diaChi } = req.body;
+    const { ten, email, matKhau, soDienThoai, diaChi, vaiTro } = req.body;
 
     // Mã hóa mật khẩu trước khi lưu
     const salt = await bcrypt.genSalt(10);
@@ -17,10 +17,11 @@ exports.dangKy = async (req, res) => {
       email,
       matKhau: matKhauMaHoa,
       soDienThoai,
-      diaChi
+      diaChi,
+      vaiTro: vaiTro || 'khachhang' // Nếu không có vai trò, mặc định là khách hàng
     });
 
-    const token = jwt.sign({ id: nguoiDung._id }, 'theanh', { expiresIn: '1h' });
+    const token = jwt.sign({ id: nguoiDung._id }, 'dangdo', { expiresIn: '24h' });
 
     res.status(201).json({
       success: true,
