@@ -10,6 +10,11 @@ exports.getAdminDashboardStats = async (req, res) => {
     // Tổng số người dùng đã đăng ký
     const totalUsers = await User.countDocuments();
 
+    // Tổng số sản phẩm tồn kho
+    // Tính tổng số lượng tồn kho từ tất cả các sản phẩm
+    const products = await Product.find();
+    const totalInventory = products.reduce((acc, product) => acc + (product.inventory || 0), 0);
+
     // Tổng số sản phẩm đã bán
     // Chúng ta sẽ duyệt qua tất cả đơn hàng và tính tổng số lượng sản phẩm
     const allOrders = await Order.find();
@@ -21,7 +26,7 @@ exports.getAdminDashboardStats = async (req, res) => {
     });
 
     // Tổng doanh thu
-    // Tính tổng tất cả các đơn hàng đã được thanh toán (hoặc delivered)
+    // Tính tổng tất cả các đơn hàng đã được giao (status: shipped)
     const deliveredOrders = await Order.find({ status: 'shipped' });
     const totalRevenue = deliveredOrders.reduce((acc, order) => acc + order.totalAmount, 0);
 
@@ -29,6 +34,7 @@ exports.getAdminDashboardStats = async (req, res) => {
       success: true,
       stats: {
         totalUsers,
+        totalInventory, // Thêm tổng sản phẩm tồn kho
         totalProductsSold,
         totalRevenue
       }
@@ -71,3 +77,4 @@ exports.getDailyRevenue = async (req, res) => {
     res.status(500).json({ success: false, error: 'Lỗi server' });
   }
 };
+

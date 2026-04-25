@@ -1,31 +1,83 @@
-// server/src/controllers/orderController.js
 const Order = require('../models/Order');
+const Product = require('../models/Product');
 const Cart = require('../models/Cart');
+const User = require('../models/User');
+const mongoose = require('mongoose');
 
-// @desc    Tạo đơn hàng từ giỏ hàng
-// @route   POST /api/v1/orders
-// @access  Private
 exports.createOrder = async (req, res) => {
-  try {
-    const cart = await Cart.findOne({ user: req.user._id }).populate('items.product');
+  const { items } = req.body; // items: [{ product: productId, quantity: number }, ...]
 
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Giỏ hàng của bạn đang trống' });
+  // Kiểm tra items
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, message: 'Danh sách items không hợp lệ hoặc trống.' });
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    let totalAmount = 0;
+    const orderItems = [];
+
+    // Lặp qua items để kiểm tra tồn kho và tính tổng giá
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || !item.product || !item.quantity) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: 'Cấu trúc item không hợp lệ.' });
+      }
+      const product = await Product.findById(item.product).session(session);
+      if (!product) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({ success: false, message: `Sản phẩm ${item.product} không tồn tại.` });
+      }
+      if (product.inventory < item.quantity || item.quantity <= 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: `Sản phẩm ${product.name} chỉ còn ${product.inventory} trong kho hoặc số lượng không hợp lệ.`
+        });
+      }
+      totalAmount += product.price * item.quantity;
+      orderItems.push({ product: item.product, quantity: item.quantity });
     }
 
-    const totalAmount = cart.items.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+    // Giảm tồn kho
+    for (const item of items) {
+      await Product.updateOne(
+        { _id: item.product, inventory: { $gte: item.quantity } },
+        { $inc: { inventory: -item.quantity } },
+        { session }
+      );
+    }
 
-    const newOrder = await Order.create({
+    // Tạo đơn hàng
+    const order = new Order({
       user: req.user._id,
-      items: cart.items,
+      items: orderItems,
       totalAmount,
+      status: 'pending',
     });
+    await order.save({ session });
 
-    // Xóa giỏ hàng sau khi tạo đơn hàng thành công
-    await Cart.findOneAndDelete({ user: req.user._id });
+    // Xóa các item đã đặt hàng khỏi giỏ hàng
+    const cart = await Cart.findOne({ user: req.user._id }).session(session);
+    if (cart) {
+      cart.items = cart.items.filter(cartItem => {
+        return !items.some(orderItem => orderItem.product.toString() === cartItem.product.toString() && orderItem.quantity === cartItem.quantity);
+      });
+      await cart.save({ session });
+    }
 
-    res.status(201).json({ success: true, order: newOrder });
-  } catch (error) {
+    await session.commitTransaction();
+    session.endSession();
+    console.log('Order created and cart updated:', order);
+    res.status(201).json({ success: true, order });
+  } catch (e) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Error in createOrder:', e.stack);
     res.status(500).json({ success: false, error: 'Lỗi server' });
   }
 };
@@ -35,7 +87,7 @@ exports.createOrder = async (req, res) => {
 // @access  Private/Admin
 exports.getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find().populate('user', 'name email').populate('items.product', 'name price');
+    const orders = await Order.find().populate('user', 'name email phone address').populate('items.product', 'name price');
     res.status(200).json({ success: true, orders });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Lỗi server' });
@@ -47,7 +99,7 @@ exports.getAllOrders = async (req, res) => {
 // @access  Private
 exports.getMyOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user._id }).populate('items.product', 'name price');
+    const orders = await Order.find({ user: req.user._id }).populate('items.product', 'name price images').populate('user', 'name address phone');;
     res.status(200).json({ success: true, orders });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Lỗi server' });
@@ -60,7 +112,7 @@ exports.getMyOrders = async (req, res) => {
 exports.getOrderById = async (req, res) => {
   try {
     console.log('Fetching order with id:', req.params.id, 'for user:', req.user._id, 'with role:', req.user.role);
-    const order = await Order.findById(req.params.id).populate('user', 'name email').populate('items.product', 'name price');
+    const order = await Order.findById(req.params.id).populate('user', 'name email phone address').populate('items.product', 'name price images');
 
     if (!order) {
       console.log('Order not found with id:', req.params.id);

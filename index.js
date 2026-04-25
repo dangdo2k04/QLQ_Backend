@@ -7,6 +7,7 @@ const cartRoutes = require('./src/routes/cartRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 const orderRoutes = require('./src/routes/orderRoutes');
 const adminRoutes = require('./src/routes/adminRoutes');
+const categoryRoutes = require('./src/routes/categoryRoutes');
 const app = express();
 
 dotenv.config();
@@ -30,6 +31,7 @@ app.use('/api/v1', cartRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/categories', categoryRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server đang chạy trên http://localhost:${PORT}`);

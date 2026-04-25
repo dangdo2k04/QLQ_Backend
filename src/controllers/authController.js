@@ -8,10 +8,10 @@ const jwt = require('jsonwebtoken');
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    const user = await User.create({ name, email, password });
+    const { name, email, password, phone, address  } = req.body;
+    const user = await User.create({ name, email, password, phone, address });
     const token = jwt.sign({ id: user._id }, 'theanh', { expiresIn: '1h' });
-    res.status(201).json({ success: true, token, user: { name: user.name, email: user.email, role: user.role } });
+    res.status(201).json({ success: true, token, user: { name: user.name, email: user.email, role: user.role, phone: user.phone, address: user.address } });
   } catch (error) {
     res.status(400).json({ success: false, error: error.message });
   }
@@ -23,7 +23,7 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
+    if (!email || !password ) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ email và mật khẩu' });
     }
     const user = await User.findOne({ email }).select('+password');

@@ -21,10 +21,19 @@ const UserSchema = new mongoose.Schema({
     minlength: 6,
     select: false,
   },
+  phone: {
+    type: String,
+    required: [true, 'Vui lòng nhập số điện thoại'],
+    match: [/^(0|\+84)(3[2-9]|5[6|8|9]|7[0|6-9]|8[1-5]|9[0-4|6-9])[0-9]{7}$/, 'Vui lòng nhập đúng định dạng số điện thoại'],
+  },
+  address: {
+    type: String,
+    required: [true, 'Vui lòng nhập địa chỉ'],
+  },
   role: {
     type: String,
     enum: ['user', 'admin'],
-    default: 'admin',
+    default: 'user',
   },
   createdAt: {
     type: Date,

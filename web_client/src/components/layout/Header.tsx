@@ -56,7 +56,7 @@ const Header = () => {
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', alignItems: 'center' }}>
           {/* Các liên kết luôn hiển thị */}
           <li style={{ marginLeft: '20px' }}><Link to="/" style={{ textDecoration: 'none', color: '#333' }}>Trang chủ</Link></li>
-          <li style={{ marginLeft: '20px' }}><Link to="/news" style={{ textDecoration: 'none', color: '#333' }}>Tin tức</Link></li>
+          <li style={{ marginLeft: '20px' }}><Link to="/category" style={{ textDecoration: 'none', color: '#333' }}>Hãng xe</Link></li>
           <li style={{ marginLeft: '20px' }}><Link to="/about" style={{ textDecoration: 'none', color: '#333' }}>Giới thiệu</Link></li>
           <li style={{ marginLeft: '20px' }}><Link to="/contact" style={{ textDecoration: 'none', color: '#333' }}>Liên hệ</Link></li>
 

@@ -9,8 +9,9 @@ import Header from '../components/layout/Header';
 import MyOrdersPage from '../pages/MyOrdersPage';
 import OrderDetailsPage from '../pages/OrderDetailsPage';
 import ProfilePage from '../pages/ProfilePage';
+import Category from '../pages/Category';
 
-const NewsPage = () => <h1>Tin tức</h1>;
+//const NewsPage = () => <h1>Tin tức</h1>;
 const AboutPage = () => <h1>Giới thiệu</h1>;
 const ContactPage = () => <h1>Liên hệ</h1>;
 
@@ -23,7 +24,7 @@ const AppRouter = () => {
           <Route path="/" element={<HomePage />} />
           <Route path="/product/:id" element={<ProductDetailsPage />} />
           <Route path="/cart" element={<CartPage />} />
-          <Route path="/news" element={<NewsPage />} />
+          <Route path="/category" element={<Category />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/register" element={<RegisterPage />} />
