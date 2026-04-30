@@ -17,13 +17,12 @@ const router = express.Router();
 router.get('/', layTatCaDanhMuc);
 router.get('/:id', layDanhMucTheoId);
 router.get('/:id/san-pham', laySanPhamTheoDanhMuc);
+router.use(baoVe);
+router.post('/', phanQuyen('admin', 'nhanvien_kho'),taoDanhMuc);
 
 // --- Tuyến đường Quản trị (Admin Only) ---
 // Chỉ Admin mới có quyền thay đổi cấu trúc danh mục hàng hóa
-router.use(baoVe);
 router.use(phanQuyen('admin'));
-
-router.post('/', taoDanhMuc);
 
 router.route('/:id')
   .put(capNhatDanhMuc)

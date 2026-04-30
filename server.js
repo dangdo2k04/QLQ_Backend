@@ -14,6 +14,8 @@ const DanhMucRoutes = require('./src/routes/DanhMucRoutes');
 const PhieuNhapRoutes = require('./src/routes/PhieuNhapRoutes');
 const NhatKyKhoRoutes = require('./src/routes/NhatKyKhoRoutes');
 const ThongBaoRoutes = require('./src/routes/ThongBaoRoutes');
+const BaoCaoRoutes = require('./src/routes/BaoCaoRoutes');
+const XuatKhoRoutes = require('./src/routes/XuatKhoRoutes');
 
 dotenv.config();
 
@@ -88,7 +90,8 @@ app.use('/api/v1/danh-muc', DanhMucRoutes);
 app.use('/api/v1/phieu-nhap', PhieuNhapRoutes);
 app.use('/api/v1/nhat-ky-kho', NhatKyKhoRoutes);
 app.use('/api/v1/thong-bao', ThongBaoRoutes);
-
+app.use('/api/v1/bao-cao', BaoCaoRoutes);
+app.use('/api/v1/xuat-kho', XuatKhoRoutes);
 // --- START SERVER ---
 server.listen(PORT, () => {
   console.log(`🚀 Server ready on port ${PORT}`);

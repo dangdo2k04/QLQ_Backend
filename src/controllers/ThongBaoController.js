@@ -4,17 +4,30 @@ const ThongBao = require('../models/ThongBao');
 // @route   GET /api/v1/thong-bao
 exports.layThongBaoCuaToi = async (req, res) => {
   try {
-    // Admin xem thông báo hệ thống/tồn kho, Khách xem thông báo đơn hàng của họ
-    const truyVan = {
-      $or: [
-        { nguoiNhan: req.user.id },
-        { nguoiNhan: null } // Thông báo chung cho hệ thống (Admin)
-      ]
-    };
+    let truyVan = {};
+
+    // 1. Phân quyền truy vấn
+    if (req.user.vaiTro === 'admin' || req.user.vaiTro === 'nhanvien_kho') {
+      // Quản lý: Thấy thông báo Đích danh của mình + Thông báo TonKho + Thông báo HeThong chung
+      truyVan = {
+        $or: [
+          { nguoiNhan: req.user.id }, // Thông báo riêng
+          { loaiThongBao: 'TonKho' },   // Thông báo kho hàng
+          { loaiThongBao: 'HeThong', nguoiNhan: null } // Thông báo hệ thống chung
+        ]
+      };
+    } else {
+      // Khách hàng: CHỈ thấy thông báo liên quan đến DonHang của chính họ
+      // Hoặc thông báo HeThong nếu bạn gửi đích danh cho họ
+      truyVan = { 
+        nguoiNhan: req.user.id,
+        loaiThongBao: 'DonHang' // Đảm bảo khách không thấy thông báo TonKho
+      };
+    }
 
     const thongBaos = await ThongBao.find(truyVan)
       .sort('-createdAt')
-      .limit(50); // Chỉ lấy 50 thông báo mới nhất
+      .limit(50);
 
     res.status(200).json({
       success: true,
@@ -22,7 +35,7 @@ exports.layThongBaoCuaToi = async (req, res) => {
       duLieu: thongBaos
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+    res.status(500).json({ success: false, message: 'Lỗi máy chủ khi lấy thông báo' });
   }
 };
 

@@ -7,7 +7,8 @@ const {
     capNhatMe, 
     xoaNguoiDung, 
     doiMatKhau,
-    layChiTietNguoiDung 
+    layChiTietNguoiDung,
+    capNhatNguoiDung
 } = require('../controllers/NguoiDungController');
 
 const { baoVe, phanQuyen } = require('../middlewares/authMiddleware');
@@ -34,5 +35,6 @@ router.route('/quan-ly')
 router.route('/quan-ly/:id')
     .get(layChiTietNguoiDung)
     .delete(xoaNguoiDung);
+router.put('/quan-ly/:id', capNhatNguoiDung); // Admin có thể cập nhật thông tin người dùng khác
 
 module.exports = router;

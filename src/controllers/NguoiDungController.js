@@ -210,3 +210,18 @@ exports.xoaNguoiDung = async (req, res) => {
     res.status(500).json({ success: false, message: 'Lỗi khi xóa người dùng' });
   }
 };
+
+// Tại NguoiDungController.js
+exports.capNhatNguoiDung = async (req, res) => {
+    try {
+        const { ten, soDienThoai, diaChi, vaiTro } = req.body;
+        const nguoiDung = await NguoiDung.findByIdAndUpdate(
+            req.params.id, 
+            { ten, soDienThoai, diaChi, vaiTro }, 
+            { new: true, runValidators: true }
+        );
+        res.status(200).json({ success: true, duLieu: nguoiDung });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

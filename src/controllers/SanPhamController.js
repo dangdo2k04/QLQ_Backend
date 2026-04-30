@@ -4,49 +4,71 @@ const SanPham = require('../models/SanPham');
 // @route   GET /api/v1/san-pham
 exports.layTatCaSanPham = async (req, res) => {
   try {
-    const { gioiHan, trang, sapXep, boLoc, tenSanPham } = req.query;
+    // 1. Lấy và chuẩn hóa các tham số query
+    const { 
+      gioiHan, 
+      trang, 
+      sapXep, 
+      danhMuc, // Lấy trực tiếp danhMuc thay vì bóc từ boLoc
+      giaMin, 
+      giaMax, 
+      tenSanPham 
+    } = req.query;
     
-    const limitValue = parseInt(gioiHan) || 20;
-    const pageValue = parseInt(trang) - 1 || 0;
+    const limitValue = parseInt(gioiHan) || 12; // Khớp với itemsPerPage ở Frontend
+    const pageValue = Math.max(parseInt(trang) || 1, 1);
+    const skipValue = (pageValue - 1) * limitValue;
+
     let query = { trangThai: 'DangBan' };
 
-    // 1. Tìm kiếm theo tên sản phẩm
+    // 2. Tìm kiếm theo tên sản phẩm (Regex an toàn hơn)
     if (tenSanPham) {
-      query.tenSanPham = { $regex: tenSanPham, $options: 'i' };
+      query.tenSanPham = { $regex: tenSanPham.trim(), $options: 'i' };
     }
 
-    // 2. Xử lý bộ lọc (Ví dụ: danh mục, khoảng giá)
-    if (boLoc) {
-      const parsedFilter = JSON.parse(boLoc);
-      query = { ...query, ...parsedFilter };
+    // 3. Lọc theo Danh mục (Đây là phần bạn vừa muốn thêm)
+    if (danhMuc && danhMuc !== 'all') {
+      query.danhMuc = danhMuc;
     }
 
-    // 3. Xử lý sắp xếp
+    // 4. Lọc theo Khoảng giá (Nếu có)
+    if (giaMin || giaMax) {
+      query.giaBan = {};
+      if (giaMin) query.giaBan.$gte = parseInt(giaMin);
+      if (giaMax) query.giaBan.$lte = parseInt(giaMax);
+    }
+
+    // 5. Xử lý sắp xếp (Mặc định mới nhất trước)
     let sortOptions = { createdAt: -1 };
     if (sapXep) {
+      // Ví dụ sapXep=giaBan,asc
       const [field, order] = sapXep.split(',');
       sortOptions = { [field]: order === 'asc' ? 1 : -1 };
     }
 
-    const tongSanPham = await SanPham.countDocuments(query);
-    const sanPhams = await SanPham.find(query)
-      .limit(limitValue)
-      .skip(pageValue * limitValue)
-      .sort(sortOptions)
-      .populate('danhMuc', 'tenDanhMuc'); // Lấy tên danh mục để hiển thị
+    // 6. Thực thi truy vấn (Chạy song song để tối ưu thời gian phản hồi)
+    const [sanPhams, tongSanPham] = await Promise.all([
+      SanPham.find(query)
+        .limit(limitValue)
+        .skip(skipValue)
+        .sort(sortOptions)
+        .populate('danhMuc', 'tenDanhMuc'),
+      SanPham.countDocuments(query)
+    ]);
 
+    // 7. Phản hồi dữ liệu
     res.status(200).json({
       success: true,
+      soLuong: tongSanPham, // Tổng số lượng tìm thấy (để làm phân trang)
       duLieu: sanPhams,
-      tong: tongSanPham,
-      trangHienTai: pageValue + 1,
+      trangHienTai: pageValue,
       tongTrang: Math.ceil(tongSanPham / limitValue),
     });
   } catch (error) {
+    console.error("Lỗi layTatCaSanPham:", error);
     res.status(500).json({ success: false, message: 'Lỗi máy chủ khi lấy sản phẩm' });
   }
 };
-
 // @desc    Tạo sản phẩm mới (Lần đầu nhập kho)
 // @route   POST /api/v1/san-pham
 exports.taoSanPham = async (req, res) => {

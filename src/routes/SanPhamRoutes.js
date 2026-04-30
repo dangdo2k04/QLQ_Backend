@@ -30,11 +30,11 @@ router.use(baoVe); // Tất cả các route bên dưới cần Token
 
 // Route dành cho cả Admin và Nhân viên Kho
 router.get('/he-thong/canh-bao-ton-kho', phanQuyen('admin', 'nhanvien_kho'), layCanhBaoTonKho);
+router.post('/', phanQuyen('admin', 'nhanvien_kho'), taoSanPham); // Chỉ Admin và Nhân viên Kho mới có quyền thêm sản phẩm
 
 // Tuyến đường dành riêng cho Quản trị viên (Admin Only)
 router.use(phanQuyen('admin'));
 
-router.post('/', taoSanPham);
 
 router.route('/:id')
   .put(capNhatSanPham)

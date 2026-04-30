@@ -8,101 +8,124 @@ const mongoose = require('mongoose');
 // @desc    Tạo đơn hàng mới (Xử lý trừ tồn kho & Xóa giỏ hàng)
 // @route   POST /api/v1/don-hang
 exports.taoDonHang = async (req, res) => {
-  const { items, phuongThucThanhToan, diaChiGiaoHang, ghiChu } = req.body;
+    const { items, phuongThucThanhToan, diaChiGiaoHang, ghiChu } = req.body;
+    const io = req.app.get('socketio');
 
-  if (!Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ success: false, message: 'Danh sách sản phẩm không được trống.' });
-  }
+    if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, message: 'Danh sách sản phẩm trống.' });
+    }
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-  try {
-    let tongTien = 0;
-    const danhSachSanPhamDonHang = [];
+    try {
+        let tamTinh = 0;
+        const danhSachSanPhamDonHang = [];
+        const maDonHangMoi = `DH${Date.now()}`;
 
-    // 1. Kiểm tra tồn kho và tính toán giá
-    for (const item of items) {
-      const sanPham = await SanPham.findById(item.sanPhamId).session(session);
+        // 1. Xử lý từng sản phẩm trong đơn hàng
+        for (const item of items) {
+            const sanPham = await SanPham.findById(item.sanPhamId).session(session);
 
-      if (!sanPham) {
-        throw new Error(`Sản phẩm với ID ${item.sanPhamId} không tồn tại.`);
-      }
+            if (!sanPham || sanPham.trangThai !== 'DangBan') {
+                throw new Error(`Sản phẩm ${item.sanPhamId} không tồn tại hoặc đã ngừng bán.`);
+            }
 
-      if (sanPham.tonKho < item.soLuong || item.soLuong <= 0) {
-        throw new Error(`Sản phẩm ${sanPham.tenSanPham} không đủ tồn kho (Hiện có: ${sanPham.tonKho}).`);
-      }
+            if (sanPham.tonKho < item.soLuong) {
+                throw new Error(`Sản phẩm ${sanPham.tenSanPham} không đủ hàng (Kho còn: ${sanPham.tonKho}).`);
+            }
 
-      // Ghi nhật ký biến động kho (Loại: BanHang)
-      await NhatKyKho.create([{
-        sanPham: sanPham._id,
-        loaiBienDong: 'BanHang',
-        soLuongThayDoi: -item.soLuong,
-        tonKhoTruoc: sanPham.tonKho,
-        tonKhoSau: sanPham.tonKho - item.soLuong,
-        nguoiThucHien: req.user._id
-      }], { session });
+            // --- Ghi nhật ký kho ---
+            await NhatKyKho.create([{
+                sanPham: sanPham._id,
+                loaiBienDong: 'BanHang',
+                soLuongThayDoi: -item.soLuong,
+                tonKhoTruoc: sanPham.tonKho,
+                tonKhoSau: sanPham.tonKho - item.soLuong,
+                maThamChieu: maDonHangMoi,
+                nguoiThucHien: req.user._id
+            }], { session });
 
-      // Cập nhật tồn kho sản phẩm
-      sanPham.tonKho -= item.soLuong;
-      await sanPham.save({ session });
+            // --- Trừ tồn kho ---
+            sanPham.tonKho -= item.soLuong;
+            await sanPham.save({ session });
 
-      // Kiểm tra ngưỡng thông báo sắp hết hàng
-      if (sanPham.tonKho <= sanPham.nguongThongBao) {
-        await ThongBao.create([{
-          tieuDe: 'Cảnh báo tồn kho',
-          noiDung: `Sản phẩm ${sanPham.tenSanPham} sắp hết hàng (${sanPham.tonKho} món)`,
-          loaiThongBao: 'TonKho',
-          duongDan: `/admin/san-pham/${sanPham._id}`
+            // --- Thông báo sắp hết hàng ---
+            if (sanPham.tonKho <= sanPham.nguongThongBao) {
+                const [thongBaoTon] = await ThongBao.create([{
+                    tieuDe: '⚠️ Cảnh báo tồn kho',
+                    noiDung: `Sản phẩm ${sanPham.tenSanPham} sắp hết (Còn ${sanPham.tonKho})`,
+                    loaiThongBao: 'TonKho',
+                    duongDan: `/admin/san-pham`
+                }], { session });
+                if (io) io.to('admin_room').emit('new_notification', thongBaoTon);
+            }
+
+            tamTinh += sanPham.giaBan * item.soLuong;
+            danhSachSanPhamDonHang.push({
+                sanPham: sanPham._id,
+                soLuong: item.soLuong,
+                giaLucDat: sanPham.giaBan // Lưu giá tại thời điểm đặt hàng
+            });
+        }
+
+        // 2. LOGIC TÍNH PHÍ SHIP & KHUYẾN MÃI (Khớp với Giỏ hàng)
+        const phiVanChuyen = tamTinh >= 1000000 ? 0 : 30000;
+        const khuyenMai = tamTinh >= 2000000 ? 50000 : 0;
+        const tongThanhToan = tamTinh + phiVanChuyen - khuyenMai;
+
+        // 3. Tạo Đơn hàng
+        const donHang = new DonHang({
+            maDonHang: maDonHangMoi,
+            khachHang: req.user._id,
+            chiTietDonHang: danhSachSanPhamDonHang,
+            tamTinh,
+            phiVanChuyen,
+            khuyenMai,
+            tongTien: tongThanhToan,
+            phuongThucThanhToan,
+            diaChiGiaoHang,
+            ghiChu,
+            trangThaiDonHang: 'ChoXacNhan'
+        });
+        await donHang.save({ session });
+
+        // 4. Thông báo Đa kênh (Admin & Khách)
+        const [tbAdmin] = await ThongBao.create([{
+            tieuDe: '🛒 Đơn hàng mới',
+            noiDung: `Bạn có đơn hàng mới ${maDonHangMoi} từ ${req.user.ten}`,
+            loaiThongBao: 'DonHang',
+            duongDan: `/admin/don-hang/${donHang._id}`
         }], { session });
-      }
+        if (io) io.to('admin_room').emit('new_notification', tbAdmin);
 
-      tongTien += sanPham.giaBan * item.soLuong;
-      danhSachSanPhamDonHang.push({
-        sanPham: sanPham._id,
-        soLuong: item.soLuong,
-        giaLucBan: sanPham.giaBan // Quan trọng: Bảo toàn giá tại thời điểm mua
-      });
+        const [tbKhach] = await ThongBao.create([{
+            nguoiNhan: req.user._id,
+            tieuDe: '🎉 Đặt hàng thành công',
+            noiDung: `Đơn hàng ${maDonHangMoi} trị giá ${tongThanhToan.toLocaleString()}đ đã đặt thành công.`,
+            loaiThongBao: 'DonHang',
+            duongDan: `/my-orders`
+        }], { session });
+        if (io) io.to(req.user._id.toString()).emit('new_notification', tbKhach);
+
+        // 5. Xóa giỏ hàng (Chỉ xóa những món đã đặt thành công)
+        const idsDaMua = items.map(i => i.sanPhamId.toString());
+        await GioHang.findOneAndUpdate(
+            { nguoiDung: req.user._id },
+            { $pull: { items: { sanPham: { $in: idsDaMua } } } },
+            { session }
+        );
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(201).json({ success: true, message: "Đặt hàng thành công", donHang });
+
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        res.status(400).json({ success: false, message: error.message });
     }
-
-    // 2. Tạo đơn hàng
-    const donHang = new DonHang({
-      maDonHang: `DH${Date.now()}`,
-      khachHang: req.user._id,
-      items: danhSachSanPhamDonHang,
-      tongTien,
-      phuongThucThanhToan,
-      diaChiGiaoHang,
-      ghiChu,
-      trangThaiDonHang: 'ChoXacNhan'
-    });
-    await donHang.save({ session });
-
-    // 3. Cập nhật mã tham chiếu cho Nhật ký kho (để sau này đối soát đơn hàng)
-    await NhatKyKho.updateMany(
-      { maThamChieu: "DANG_XU_LY", nguoiThucHien: req.user._id },
-      { maThamChieu: donHang.maDonHang },
-      { session }
-    );
-
-    // 4. Dọn dẹp giỏ hàng (Xóa các sản phẩm đã thanh toán)
-    const gioHang = await GioHang.findOne({ nguoiDung: req.user._id }).session(session);
-    if (gioHang) {
-      const idsDaMua = items.map(i => i.sanPhamId.toString());
-      gioHang.items = gioHang.items.filter(item => !idsDaMua.includes(item.sanPham.toString()));
-      await gioHang.save({ session });
-    }
-
-    await session.commitTransaction();
-    session.endSession();
-
-    res.status(201).json({ success: true, duLieu: donHang });
-
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    res.status(400).json({ success: false, message: error.message });
-  }
 };
 
 // @desc    Lấy tất cả đơn hàng (Dành cho Admin)
@@ -159,18 +182,105 @@ exports.layChiTietDonHang = async (req, res) => {
 exports.capNhatTrangThai = async (req, res) => {
   try {
     const { trangThaiMoi } = req.body;
+    const io = req.app.get('socketio');
+
+    // 1. Tìm đơn hàng trước để lấy thông tin khách hàng và mã đơn hàng
+    const donHangCheck = await DonHang.findById(req.params.id);
+    if (!donHangCheck) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
+    }
+
+    // 2. Cập nhật trạng thái mới
     const donHang = await DonHang.findByIdAndUpdate(
       req.params.id,
       { trangThaiDonHang: trangThaiMoi },
       { new: true, runValidators: true }
     );
 
-    if (!donHang) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
+    // 3. Mapping nội dung thông báo dựa trên trạng thái
+    let tieuDeThongBao = '';
+    let noiDungThongBao = '';
+
+    switch (trangThaiMoi) {
+      case 'DangGiao':
+        tieuDeThongBao = '🚚 Đơn hàng đang được giao';
+        noiDungThongBao = `Đơn hàng ${donHang.maDonHang} của bạn đang trên đường vận chuyển.`;
+        break;
+      case 'DaHoanThanh':
+        tieuDeThongBao = '✅ Giao hàng thành công';
+        noiDungThongBao = `Đơn hàng ${donHang.maDonHang} đã được giao thành công. Cảm ơn bạn đã mua hàng!`;
+        break;
+      case 'DaHuy':
+        tieuDeThongBao = '❌ Đơn hàng đã bị hủy';
+        noiDungThongBao = `Rất tiếc, đơn hàng ${donHang.maDonHang} đã bị hủy. Vui lòng liên hệ shop để biết thêm chi tiết.`;
+        break;
+      default:
+        tieuDeThongBao = '📦 Cập nhật trạng thái đơn hàng';
+        noiDungThongBao = `Đơn hàng ${donHang.maDonHang} đã chuyển sang trạng thái: ${trangThaiMoi}`;
     }
 
-    res.status(200).json({ success: true, duLieu: donHang });
+    // 4. Lưu thông báo vào Database dành cho Khách hàng
+    const thongBao = await ThongBao.create({
+      nguoiNhan: donHang.khachHang, // ID của khách hàng chủ đơn
+      tieuDe: tieuDeThongBao,
+      noiDung: noiDungThongBao,
+      loaiThongBao: 'DonHang',
+      duongDan: `/don-hang-cua-toi/${donHang._id}`
+    });
+
+    // 5. Bắn Real-time cho khách hàng qua Socket.io (Room là ID của khách)
+    if (io) {
+      io.to(donHang.khachHang.toString()).emit('new_notification', thongBao);
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Cập nhật trạng thái và gửi thông báo thành công',
+      duLieu: donHang 
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái' });
+    res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái: ' + error.message });
+  }
+};
+
+exports.huyDonHang = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const donHang = await DonHang.findById(req.params.id).session(session);
+    if (donHang.trangThaiDonHang === 'DaHoanThanh' || donHang.trangThaiDonHang === 'DaHuy') {
+      throw new Error('Không thể hủy đơn hàng này');
+    }
+
+    // HOÀN KHO CHO TỪNG SẢN PHẨM
+    for (const item of donHang.chiTietDonHang) {
+      const sanPham = await SanPham.findById(item.sanPham).session(session);
+      
+      // Ghi nhật ký hoàn kho (Số dương)
+      await NhatKyKho.create([{
+        sanPham: sanPham._id,
+        loaiBienDong: 'HoanTra', // Hoặc tạo loại mới là 'HuyDon'
+        soLuongThayDoi: item.soLuong, 
+        tonKhoTruoc: sanPham.tonKho,
+        tonKhoSau: sanPham.tonKho + item.soLuong,
+        maThamChieu: donHang.maDonHang,
+        nguoiThucHien: req.user._id
+      }], { session });
+
+      sanPham.tonKho += item.soLuong;
+      await sanPham.save({ session });
+    }
+
+    donHang.trangThaiDonHang = 'DaHuy';
+    await donHang.save({ session });
+
+    await session.commitTransaction();
+    res.status(200).json({ success: true, message: 'Hủy đơn và hoàn kho thành công' });
+  } catch (error) {
+    await session.abortTransaction();
+    res.status(400).json({ success: false, message: error.message });
+  } finally {
+    session.endSession();
   }
 };
