@@ -25,22 +25,25 @@ const PORT = process.env.PORT || 5000;
 // --- CẤU HÌNH CORS LINH HOẠT ---
 // Danh sách các domain được phép truy cập (Local và Vercel sau này)
 const whitelist = [
+  'http://localhost:5173', // Cho phép khi bạn chạy npm run dev ở máy
   'http://localhost:3000',
-  'http://localhost:5173', // Thường dùng cho Vite
-  process.env.FRONTEND_URL // Domain Vercel bạn sẽ dán vào file .env sau này
+  'https://qlk-bh-frontend.vercel.app', // Link Vercel của bạn
+  process.env.FRONTEND_URL // Lấy từ biến môi trường trên Render cho chắc chắn
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Cho phép các request không có origin (như Postman hoặc mobile app)
-    if (!origin || whitelist.indexOf(origin) !== -1) {
+    // Nếu request không có origin (như dùng Postman) hoặc nằm trong whitelist thì cho qua
+    if (!origin || whitelist.includes(origin)) {
       callback(null, true);
     } else {
+      console.log("Domain bị chặn bởi CORS:", origin);
       callback(new Error('Chặn bởi CORS: Domain này không có quyền truy cập!'));
     }
   },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE"]
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true, // Rất quan trọng nếu bạn có dùng Cookie hoặc gửi Token
 };
 
 app.use(cors(corsOptions));
