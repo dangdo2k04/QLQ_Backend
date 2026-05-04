@@ -31,8 +31,16 @@ const whitelist = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Nếu request không có origin (như dùng Postman) hoặc nằm trong whitelist thì cho qua
-    if (!origin || whitelist.includes(origin)) {
+    // 1. Cho phép nếu không có origin (như Postman)
+    if (!origin) return callback(null, true);
+
+    // 2. Kiểm tra nếu origin nằm trong whitelist cứng
+    const isWhitelisted = whitelist.includes(origin);
+
+    // 3. Kiểm tra nếu origin là một domain con của vercel.app
+    const isVercelPreview = origin.endsWith('.vercel.app');
+
+    if (isWhitelisted || isVercelPreview) {
       callback(null, true);
     } else {
       console.log("Domain bị chặn bởi CORS:", origin);
@@ -41,7 +49,7 @@ const corsOptions = {
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true, // Rất quan trọng nếu bạn có dùng Cookie hoặc gửi Token
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
