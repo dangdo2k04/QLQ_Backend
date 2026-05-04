@@ -26,7 +26,7 @@ const PORT = process.env.PORT || 5000;
 // Danh sách các domain được phép truy cập (Local và Vercel sau này)
 const whitelist = [
   'http://localhost:5173', // Cho phép khi bạn chạy npm run dev ở máy
-  'https://qlk-bh-frontend.vercel.app', // Link Vercel của bạn
+  'https://qlk-frontend.vercel.app/' , // Link Vercel của bạn
 ];
 
 const corsOptions = {
