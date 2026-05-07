@@ -15,7 +15,7 @@ exports.layTatCaSanPham = async (req, res) => {
       tenSanPham 
     } = req.query;
     
-    const limitValue = parseInt(gioiHan) || 12; // Khớp với itemsPerPage ở Frontend
+    const limitValue = parseInt(gioiHan) || 9; // Khớp với itemsPerPage ở Frontend
     const pageValue = Math.max(parseInt(trang) || 1, 1);
     const skipValue = (pageValue - 1) * limitValue;
 

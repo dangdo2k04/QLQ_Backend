@@ -2,7 +2,8 @@ const express = require('express');
 const { 
   taoPhieuNhap, 
   layTatCaPhieuNhap, 
-  layChiTietPhieuNhap 
+  layChiTietPhieuNhap,
+  xuatExcelPhieuNhap 
 } = require('../controllers/PhieuNhapController');
 
 const { baoVe, phanQuyen } = require('../middlewares/authMiddleware');
@@ -14,11 +15,12 @@ router.use(baoVe);
 
 // Chỉ Admin và Nhân viên kho mới được phép thao tác
 router.use(phanQuyen('admin', 'nhanvien_kho'));
-
+router.get('/:id/xuat-excel', xuatExcelPhieuNhap);
 router.route('/')
   .post(taoPhieuNhap)
   .get(layTatCaPhieuNhap);
 
 router.get('/:id', layChiTietPhieuNhap);
+
 
 module.exports = router;
