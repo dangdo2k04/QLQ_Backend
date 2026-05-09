@@ -78,13 +78,17 @@ exports.taoDonHang = async (req, res) => {
         const donHang = new DonHang({
             maDonHang: maDonHangMoi,
             khachHang: req.user._id,
-            chiTietDonHang: danhSachSanPhamDonHang,
-            tamTinh,
-            phiVanChuyen,
-            khuyenMai,
+            
+            // SỬA TẠI ĐÂY: Phải dùng 'items' thay vì 'chiTietDonHang'
+            items: danhSachSanPhamDonHang.map(item => ({
+                sanPham: item.sanPham,
+                soLuong: item.soLuong,
+                giaLucBan: item.giaLucDat // SỬA: Chuyển 'giaLucDat' về 'giaLucBan' cho khớp Schema
+            })),
+
             tongTien: tongThanhToan,
             phuongThucThanhToan,
-            diaChiGiaoHang,
+            // diaChiGiaoHang: diaChiGiaoHang, // Đảm bảo Schema của bạn có trường này
             ghiChu,
             trangThaiDonHang: 'ChoXacNhan'
         });
@@ -283,4 +287,41 @@ exports.huyDonHang = async (req, res) => {
   } finally {
     session.endSession();
   }
+};
+
+// donHangController.js
+exports.kiemTraDonHang = async (req, res) => {
+    try {
+        const { items } = req.body; // [{sanPhamId, soLuong}]
+        let tamTinh = 0;
+        const chiTietSanPhams = [];
+
+        for (const item of items) {
+            const sp = await SanPham.findById(item.sanPhamId);
+            if (sp) {
+                tamTinh += sp.giaBan * item.soLuong;
+                chiTietSanPhams.push({
+                    sanPham: sp,
+                    soLuong: item.soLuong,
+                    thanhTien: sp.giaBan * item.soLuong
+                });
+            }
+        }
+
+        const phiVanChuyen = tamTinh >= 1000000 ? 0 : 30000;
+        const khuyenMai = tamTinh >= 2000000 ? 50000 : 0;
+
+        res.json({
+            success: true,
+            duLieu: {
+                items: chiTietSanPhams,
+                tamTinh,
+                phiVanChuyen,
+                khuyenMai,
+                tongThanhToan: tamTinh + phiVanChuyen - khuyenMai
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 };

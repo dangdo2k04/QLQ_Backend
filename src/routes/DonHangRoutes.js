@@ -5,7 +5,8 @@ const {
     layDonHangCuaToi, 
     layChiTietDonHang, 
     capNhatTrangThai,
-    huyDonHang
+    huyDonHang,
+    kiemTraDonHang
 } = require('../controllers/DonHangController');
 
 const { baoVe, phanQuyen } = require('../middlewares/authMiddleware');
@@ -16,9 +17,11 @@ const router = express.Router();
 router.use(baoVe);
 
 // Tuyến đường cho Khách hàng & Nhân viên
+router.post('/kiem-tra', kiemTraDonHang);
 router.post('/', taoDonHang); // Đặt hàng
 router.get('/lich-su-mua-hang', layDonHangCuaToi); // Xem đơn của chính mình
 router.get('/:id', layChiTietDonHang); 
+ // Kiểm tra đơn hàng trước khi đặt
 // Xem chi tiết đơn (Có check chủ sở hữu trong controller)
 router.delete('/:id',phanQuyen(''), huyDonHang); // Hủy đơn hàng (Chỉ khách hàng mới có quyền này)
 
