@@ -3,6 +3,8 @@ const SanPham = require('../models/SanPham');
 const GioHang = require('../models/GioHang');
 const NhatKyKho = require('../models/NhatKyKho');
 const ThongBao = require('../models/ThongBao');
+const PhieuXuat = require('../models/PhieuXuat');
+const ExcelJS = require('exceljs');
 const mongoose = require('mongoose');
 
 // @desc    Tạo đơn hàng mới (Xử lý trừ tồn kho & Xóa giỏ hàng)
@@ -93,6 +95,20 @@ exports.taoDonHang = async (req, res) => {
             trangThaiDonHang: 'ChoXacNhan'
         });
         await donHang.save({ session });
+        const phieuXuat = new PhieuXuat({
+            maPhieu: `PX${Date.now()}`,
+            loaiXuat: 'BanHang',
+            donHang: donHang._id,
+            nhanVienKho: req.user._id, // Tạm thời gán người tạo là admin/nv bán
+            chiTietXuat: danhSachSanPhamDonHang.map(item => ({
+                sanPham: item.sanPham,
+                soLuongYeuCau: item.soLuong,
+                soLuongThucXuat: item.soLuong, // Mặc định khớp, thủ kho sửa sau nếu thiếu
+                giaXuat: item.giaLucBan
+            })),
+            trangThai: 'DangChuanBi'
+        });
+        await phieuXuat.save({ session });
 
         // 4. Thông báo Đa kênh (Admin & Khách)
         const [tbAdmin] = await ThongBao.create([{
@@ -123,12 +139,49 @@ exports.taoDonHang = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
-        res.status(201).json({ success: true, message: "Đặt hàng thành công", donHang });
+        res.status(201).json({ success: true, message: "Đặt hàng thành công", donHang, phieuXuatId: phieuXuat._id });
 
     } catch (error) {
         await session.abortTransaction();
         session.endSession();
         res.status(400).json({ success: false, message: error.message });
+    }
+};
+// Hàm xuất Picking List cho thủ kho
+exports.xuatExcelPickingList = async (req, res) => {
+    try {
+        const phieu = await PhieuXuat.findById(req.params.id)
+            .populate('donHang')
+            .populate('chiTietXuat.sanPham', 'tenSanPham maSanPham donViTinh');
+
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('PickingList');
+
+        sheet.addRow(['DANH SÁCH NHẶT HÀNG (PICKING LIST)']).font = { bold: true, size: 14 };
+        sheet.addRow(['Mã phiếu xuất:', phieu.maPhieu]);
+        sheet.addRow(['Mã đơn hàng:', phieu.donHang?.maDonHang]);
+        sheet.addRow([]);
+
+        const header = sheet.addRow(['STT', 'Mã SP', 'Tên Sản Phẩm', 'Yêu Cầu', 'ĐVT', 'Thực Nhặt']);
+        header.eachCell(c => { c.font = {bold: true}; c.border = {top:{style:'thin'}, bottom:{style:'thin'}}; });
+
+        phieu.chiTietXuat.forEach((item, index) => {
+            sheet.addRow([
+                index + 1,
+                item.sanPham?.maSanPham,
+                item.sanPham?.tenSanPham,
+                item.soLuongYeuCau,
+                item.sanPham?.donViTinh,
+                '.......'
+            ]);
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=Picking-${phieu.maPhieu}.xlsx`);
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        res.status(500).send(error.message);
     }
 };
 

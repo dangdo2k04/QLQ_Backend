@@ -6,7 +6,8 @@ const {
     layChiTietDonHang, 
     capNhatTrangThai,
     huyDonHang,
-    kiemTraDonHang
+    kiemTraDonHang,
+    xuatExcelPickingList
 } = require('../controllers/DonHangController');
 
 const { baoVe, phanQuyen } = require('../middlewares/authMiddleware');
@@ -27,7 +28,7 @@ router.delete('/:id',phanQuyen(''), huyDonHang); // Hủy đơn hàng (Chỉ kh�
 
 // Tuyến đường dành riêng cho Quản trị viên & Nhân viên kho (Admin/Staff Only)
 router.use(phanQuyen('admin', 'nhanvien_kho'));
-
+router.get('/xuat-picking/:id', xuatExcelPickingList);
 router.get('/he-thong/tat-ca', layTatCaDonHang); // Xem toàn bộ đơn hàng hệ thống
 router.put('/:id/trang-thai', capNhatTrangThai); // Cập nhật trạng thái (Chờ xác nhận -> Đang giao...)
 
