@@ -135,12 +135,28 @@ exports.taoDonHang = async (req, res) => {
 // @desc    Lấy tất cả đơn hàng (Dành cho Admin)
 exports.layTatCaDonHang = async (req, res) => {
   try {
-    const donHangs = await DonHang.find()
+    // 1. Lấy trạng thái từ query string (ví dụ: ?trangThai=ChoXacNhan)
+    const { trangThai } = req.query;
+
+    // 2. Tạo đối tượng lọc dữ liệu
+    let filter = {};
+    if (trangThai) {
+      filter.trangThaiDonHang = trangThai;
+    }
+
+    // 3. Thực hiện truy vấn với filter
+    const donHangs = await DonHang.find(filter)
       .populate('khachHang', 'ten email soDienThoai diaChi')
-      .populate('items.sanPham', 'tenSanPham giaBan')
+      .populate('items.sanPham', 'tenSanPham giaBan hinhAnh') // Thêm hinhAnh để admin dễ nhìn
       .sort('-createdAt');
-    res.status(200).json({ success: true, duLieu: donHangs });
+
+    res.status(200).json({ 
+      success: true, 
+      soLuong: donHangs.length, 
+      duLieu: donHangs 
+    });
   } catch (error) {
+    console.error("Lỗi lấy đơn hàng:", error);
     res.status(500).json({ success: false, message: 'Lỗi server' });
   }
 };
