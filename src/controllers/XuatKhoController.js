@@ -6,29 +6,59 @@ const PhieuXuat = require('../models/PhieuXuat');
 
 // @desc    Xác nhận đơn hàng và thực hiện xuất kho
 // @route   PUT /api/v1/xuat-kho/xac-nhan/:id
-// @access  Riêng tư/NhanVienKho/Admin
-exports.xacNhanXuatKho = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const donHang = await DonHang.findById(id);
 
-    if (!donHang) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
-    
-    // Chỉ xác nhận nếu đơn hàng đang chờ
-    if (donHang.trangThaiDonHang !== 'ChoXacNhan') {
-      return res.status(400).json({ success: false, message: 'Đơn hàng không ở trạng thái chờ xác nhận' });
+exports.xacNhanXuatKho = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { id } = req.params; // ID của PhieuXuat
+
+    // 1. Tìm phiếu xuất kèm thông tin đơn hàng
+    const phieuXuat = await PhieuXuat.findById(id).session(session);
+
+    if (!phieuXuat) {
+      throw new Error('Không tìm thấy phiếu xuất kho');
     }
 
-    // CHỈ CẬP NHẬT TRẠNG THÁI (Vì kho đã trừ lúc đặt hàng)
-    donHang.trangThaiDonHang = 'DangGiao';
-    // Bạn có thể thêm trường nhanVienKho xử lý để biết ai đã đóng gói
-    donHang.nhanVienKho = req.user._id; 
-    
-    await donHang.save();
+    if (phieuXuat.trangThai !== 'DangChuanBi') {
+      throw new Error('Phiếu xuất không ở trạng thái chờ (có thể đã xuất hoặc bị hủy)');
+    }
 
-    res.status(200).json({ success: true, message: 'Xác nhận đơn hàng thành công, bắt đầu giao hàng' });
+    // 2. Cập nhật trạng thái Phiếu Xuất
+    phieuXuat.trangThai = 'DaXuatKho';
+    phieuXuat.nhanVienKho = req.user._id; // Lưu lại ai là người chốt phiếu
+    phieuXuat.ngayXuatKho = Date.now();
+    await phieuXuat.save({ session });
+
+    // 3. Cập nhật trạng thái Đơn Hàng liên quan
+    const donHang = await DonHang.findById(phieuXuat.donHang).session(session);
+    if (!donHang) {
+      throw new Error('Đơn hàng liên quan không tồn tại');
+    }
+
+    // Kiểm tra tính logic của đơn hàng
+    if (donHang.trangThaiDonHang === 'ChoXacNhan') {
+      donHang.trangThaiDonHang = 'DangGiao';
+      // Lưu lại nhân viên kho vào đơn hàng để dễ đối soát
+      donHang.nhanVienBan = req.user._id; 
+      await donHang.save({ session });
+    }
+
+    // 4. Hoàn tất giao dịch
+    await session.commitTransaction();
+    session.endSession();
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Xác nhận xuất kho thành công, đơn hàng đã chuyển sang Đang giao' 
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    // Nếu có bất kỳ lỗi nào, hủy bỏ toàn bộ thay đổi
+    await session.abortTransaction();
+    session.endSession();
+    res.status(400).json({ success: false, message: error.message });
   }
 };
 
